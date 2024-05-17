@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>성능 테스트</title>
+    <style>
+        #formOverlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 999;
+            display: none;
+        }
+
+        #formContainer {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: white;
+            padding: 20px;
+            z-index: 1000;
+            display: none;
+        }
+
+        #formContainer input[type="text"],
+        #formContainer select {
+            display: block;
+            margin-bottom: 10px;
+        }
+
+        #formContainer button {
+            margin-top: 10px;
+        }
+
+        .error {
+            color: red;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 style="display: inline-block;">성능 테스트</h1>
+        <button id="plusButton" onclick="showForm()">+</button>
+        <div id="displayContainer"></div>
+    </div>
+
+    <div id="formOverlay"></div>
+    <div id="formContainer">
+        <label for="targetUrl">Target URL:</label>
+        <input type="text" id="targetUrl" name="targetUrl" value=""><br>
+        <label for="testName">Test Name:</label>
+        <input type="text" id="testName" name="testName" value=""><br>
+        <label for="userNum">Initial Users:</label>
+        <input type="text" id="userNum" name="userNum" value=""><br>
+        <label for="userPlusNum">Additional Users:</label>
+        <input type="text" id="userPlusNum" name="userPlusNum" value=""><br>
+        <label for="intervalTime">Interval Time:</label>
+        <input type="text" id="intervalTime" name="intervalTime" value=""><br>
+        <label for="plusCount">Plus Count:</label>
+        <input type="text" id="plusCount" name="plusCount" value=""><br>
+
+        <button onclick="save()">Save</button>
+        <button onclick="cancel()">Cancel</button>
+        <div id="errorContainer"></div>
+    </div>
+
+    <script>
+        var testCases = []; // 배열에 테스트 케이스 저장
+
+        // 초기화 함수 - 페이지가 로드될 때 호출하여 폼이 보이지 않도록 함
+        function initialize() {
+            // 폼이 숨겨져 있도록 설정
+            document.getElementById("formOverlay").style.display = "none";
+            document.getElementById("formContainer").style.display = "none";
+
+            // esc 키 눌렀을 때 폼 닫기 이벤트 등록
+            document.addEventListener("keydown", function(event) {
+                if (event.key === "Escape") {
+                    cancel();
+                }
+            });
+        }
+
+        function showForm() {
+            // 기존 정보 초기화
+            document.getElementById("targetUrl").value = "";
+            document.getElementById("testName").value = "";
+            document.getElementById("userNum").value = "";
+            document.getElementById("userPlusNum").value = "";
+            document.getElementById("intervalTime").value = "";
+            document.getElementById("plusCount").value = "";
+            // 경고 메시지 숨기기
+            hideError();
+
+            // 폼이 보이도록 설정
+            document.getElementById("formOverlay").style.display = "block";
+            document.getElementById("formContainer").style.display = "block";
+        }
+
+        function save() {
+            // 모든 오류 메시지 숨기기
+            hideError();
+
+            var targetUrl = document.getElementById("targetUrl").value;
+            var testName = document.getElementById("testName").value;
+            var userNum = document.getElementById("userNum").value;
+            var userPlusNum = document.getElementById("userPlusNum").value;
+            var intervalTime = document.getElementById("intervalTime").value;
+            var plusCount = document.getElementById("plusCount").value;
+
+            var errors = [];
+
+            // 유효성 검사
+            if (!isValidUrl(targetUrl)) {
+                errors.push("Invalid URL의 입력 형식이 틀림");
+            }
+
+            if (!isValidNumber(userNum)) {
+                errors.push("Initial Users의 입력 형식이 틀림");
+            }
+
+            if (!isValidNumber(userPlusNum)) {
+                errors.push("Additional Users의 입력 형식이 틀림");
+            }
+
+            if (!isValidFloat(intervalTime)) {
+                errors.push("Interval Time의 입력 형식이 틀림");
+            }
+
+            if (!isValidNumber(plusCount)) {
+                errors.push("Plus Count의 입력 형식이 틀림");
+            }
+
+            if (errors.length > 0) {
+                // 오류 메시지 표시
+                displayErrors(errors);
+                return;
+            }
+            // 테스트 케이스를 객체로 저장
+            var testCase = {
+                targetUrl: targetUrl,
+                testName: testName,
+                userNum: userNum,
+                userPlusNum: userPlusNum,
+                intervalTime: intervalTime,
+                plusCount: plusCount
+            };
+
+            // POST 요청 보내기
+            fetch('/add_data', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(testCase)
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Success:', data);
+                testCase.testId = data.testId; // 반환된 ID를 testCase에 추가
+                testCases.push(testCase); // 테스트 케이스 배열에 추가
+                displayTestCases(); // 저장 후 입력한 내용을 화면에 표시
+            })
+            .catch((error) => {
+                console.error('Error:', error);
+            });
+
+            // 입력칸이 사라지도록
+            document.getElementById("formOverlay").style.display = "none";
+            document.getElementById("formContainer").style.display = "none";
+        }
+
+        function isValidUrl(url) {
+            var pattern = /^(http|https):\/\/[\w\-]+(\.[\w\-]+)+([\w\-.,@?^=%&:/~+#]*[\w\-@?^=%&/~+#])?$/;
+            return pattern.test(url);
+        }
+
+        function isValidNumber(value) {
+            // 정수인지 확인
+            return /^\d+$/.test(value);
+        }
+
+        function isValidFloat(value) {
+            // 실수인지 확인
+            return /^\d+(\.\d+)?$/.test(value);
+        }
+
+        
+        function displayErrors(errors) {
+            // 오류 메시지를 표시
+            var errorContainer = document.getElementById("errorContainer");
+            errors.forEach(function(error) {
+                var errorDiv = document.createElement("div");
+                errorDiv.classList.add("error");
+                errorDiv.textContent = error;
+                errorContainer.appendChild(errorDiv);
+            });
+        }
+
+        function hideError() {
+            // 모든 오류 메시지 숨기기
+            var errorContainer = document.getElementById("errorContainer");
+            errorContainer.innerHTML = "";
+        }
+
+        function displayTestCases() {
+            var displayContainer = document.getElementById("displayContainer");
+            displayContainer.innerHTML = ""; // 이전 내용 지우기
+
+            // 각 테스트 케이스마다 삭제 버튼과 함께 표시
+            testCases.forEach(function(testCase, index) {
+                var testCaseDiv = document.createElement("div");
+                testCaseDiv.innerHTML = `
+                    <span>${testCase.testName}</span>
+                    <button onclick="confirmDelete(${index})">-</button><br>
+                `;
+                displayContainer.appendChild(testCaseDiv);
+            });
+        }
+
+        function confirmDelete(index) {
+            var testId = testCases[index].testId;
+            var testName = testCases[index].testName;
+            console.log(`Attempting to delete test: ${testName} with ID: ${testId}`); // 디버깅 로그 추가
+            var confirmDelete = confirm(`"${testName}"을(를) 정말 삭제하시겠습니까?`);
+            if (confirmDelete) {
+                // DELETE 요청을 보내는 fetch
+                fetch(`/delete_test/${testId}`, {
+                    method: 'DELETE'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Success:', data);
+                    testCases.splice(index, 1);
+                    displayTestCases();
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                });
+            }
+        }
+
+        function deleteTestCase(index) {
+            testCases.splice(index, 1); // 해당 인덱스의 테스트 케이스 삭제
+            displayTestCases(); // 변경된 테스트 케이스 목록을 다시 표시
+        }
+
+        function cancel() {
+            document.getElementById("formOverlay").style.display = "none";
+            document.getElementById("formContainer").style.display = "none";
+            // 경고 메시지 숨기기
+            hideError();
+        }
+
+        // 페이지 로드시 초기화 함수 호출
+        initialize();
+    </script>
+</body>
+</html>
