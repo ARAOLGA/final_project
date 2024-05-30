@@ -1,0 +1,96 @@
+pipeline {
+    agent any // Jenkins 파이프라인을 어느 에이전트에서나 실행할 수 있도록 설정
+    environment {
+        SERVER_IP = '43.206.109.37' // Jenkins 서버의 IP 주소
+        SONAR_URL = 'http://43.206.109.37:9000' // SonarQube 서버의 URL
+        DOCKER_IMAGE = 'oncliff/eof-final' // Docker 이미지 이름
+        DOCKER_TAG = '1.0' // Docker 이미지 태그
+        DOCKER_CREDENTIALS_ID = 'docker-hub-credentials' // Docker Hub 인증 정보 ID
+    }
+    triggers {
+        pollSCM('* * * * *') // 매 분마다 Git 변경 사항 확인
+    }
+    stages {
+        stage('Checkout') { // 첫 번째 단계: Git 저장소에서 코드 체크아웃
+            steps {
+                checkout([
+                    $class: 'GitSCM',
+                    branches: [[name: '*/main']], // 'main' 브랜치에서 코드 가져옴
+                    userRemoteConfigs: [[
+                        url: 'https://github.com/oncliff-climbing/final.git', // Git 저장소 URL
+                        credentialsId: 'github' // Jenkins에 저장된 Git 인증 정보 사용
+                    ]]
+                ])
+            }
+        }
+        stage('SonarQube analysis') { // 두 번째 단계: SonarQube 분석 수행
+            steps {
+                withSonarQubeEnv('SonarQube_Server') { // SonarQube 환경 설정 사용
+                    sh """
+                        sonar-scanner \
+                        -Dsonar.projectKey=eof  \
+                        -Dsonar.sources=. \
+                        -Dsonar.host.url=${SONAR_URL} \
+                        -Dsonar.login=sqa_539e91bc482d78b282d1e85523dd2865959accbc
+                    """
+                }
+            }
+        }
+        stage("Slack Notification") { // 세 번째 단계: SonarQube 분석 결과에 대한 Slack 알림 전송
+            steps {
+                echo 'Sending Slack Notification...' // Slack 알림 테스트 메시지 출력
+            }
+            post {
+                success { // SonarQube 분석 성공 시
+                    slackSend(channel: '#cicd', color: 'good', 
+                    message: """*SonarQube analysis success!* \n *Jenkins:* ${env.SERVER_IP}:8080 \n *SonarQube:* ${env.SONAR_URL}""")
+                    script {
+                        currentBuild.result = 'SUCCESS' // 빌드 결과를 SUCCESS로 설정
+                    }
+                }
+                failure { // SonarQube 분석 실패 시
+                    slackSend(channel: '#cicd', color: 'danger', 
+                    message: """*SonarQube analysis failure!* \n *Jenkins:* ${env.SERVER_IP}:8080 \n *SonarQube:* ${env.SONAR_URL}""")
+                    script {
+                        currentBuild.result = 'FAILURE' // 빌드 결과를 FAILURE로 설정
+                    }
+                }
+            }
+        }
+        stage('Docker Image Build and Push') { // 네 번째 단계: Docker 이미지 빌드 및 푸시
+            when {
+                expression { return currentBuild.resultIsBetterOrEqualTo('SUCCESS') } // 빌드 성공 시에만 실행
+            }
+            environment {
+                NEW_TAG = "${DOCKER_TAG}.${env.BUILD_NUMBER}"
+            }
+            steps {
+                script {
+                    def images = ["front-app", "back-app"] // 빌드할 이미지 목록
+                    images.each { img ->
+                        dir("${env.WORKSPACE}/${img}") { // 각 이미지 디렉토리로 이동
+                            sh "docker build -t ${DOCKER_IMAGE}:${img}_${env.NEW_TAG} ." // Docker 이미지 빌드
+                            withCredentials([usernamePassword(credentialsId: DOCKER_CREDENTIALS_ID, passwordVariable: 'DOCKER_PASSWORD', usernameVariable: 'DOCKER_USERNAME')]) {
+                                sh "echo ${DOCKER_PASSWORD} | docker login -u ${DOCKER_USERNAME} --password-stdin" // Docker Hub 로그인
+                                sh "docker push ${DOCKER_IMAGE}:${img}_${env.NEW_TAG}" // Docker 이미지 푸시
+                            }
+                        }
+                    }
+                }
+            }
+            post {
+                success {
+                    slackSend(channel: '#cicd', color: 'good', message: """*Docker Build and Push Success!* \n *Docker Image:* ${DOCKER_IMAGE}:${env.NEW_TAG}""")
+                }
+                failure {
+                    slackSend(channel: '#cicd', color: 'danger', message: """*Docker Build and Push Failure!* \n *Docker Image:* ${DOCKER_IMAGE}:${env.NEW_TAG}""")
+                }
+            }
+        }
+    }
+    post {
+        always {
+            cleanWs() // 작업이 끝난 후 워크스페이스 정리
+        }
+    }
+}
