@@ -1,26 +1,42 @@
-from socket import create_connection
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
 import mysql.connector
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
+from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 import subprocess
 
 app = FastAPI()
-#--------------------------------------------------------------------------------------------------------------------------------------
-# 다른 내용 ### db설정 바꿔주세요
-# MySQL 서버에 연결
-# MySQL 데이터베이스 연결
+
+
+# CORS 설정
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # 허용할 도메인 리스트. 모든 도메인을 허용하려면 ["*"] 사용.
+    allow_credentials=True,
+    allow_methods=["*"],  # 허용할 HTTP 메서드 리스트. 모든 메서드를 허용하려면 ["*"] 사용.
+    allow_headers=["*"],  # 허용할 HTTP 헤더 리스트. 모든 헤더를 허용하려면 ["*"] 사용.
+)
+
+# AWS RDS 서버에 연결
+"""
+conn = mysql.connector.connect(
+    host="database-eof.cnakai2m8xfm.ap-northeast-1.rds.amazonaws.com",
+    user="root",
+    password="test1234",
+    database="api"
+)
+"""
 db_config = {
-    'user': 'root',      
-    'password': 'test1234',
-    'host': 'database-eof.cnakai2m8xfm.ap-northeast-1.rds.amazonaws.com',  
-    'database': 'api'
+    'user': 'user1',  
+    'password': 'user1',
+    'host': 'localhost',  
+    'database': 'test'    
 }
 
 conn = mysql.connector.connect(**db_config)
 cursor = conn.cursor()
-#--------------------------------------------------------------------------------------------------------------------------------------
-# 다른 내용 ### db데이터 저장 형식 바꿔주세요
+
 # 데이터를 전송하기 위한 모델 정의
 class TestData(BaseModel):
     target_url: str
@@ -29,7 +45,7 @@ class TestData(BaseModel):
     user_plus_num: int
     interval_time: int
     plus_count: int
-#--------------------------------------------------------------------------------------------------------------------------------------
+
 def run_load_testing_script(url, initial_user_count, additional_user_count, interval_time, repeat_count, test_id):
     command = [
         "python",
@@ -45,59 +61,30 @@ def run_load_testing_script(url, initial_user_count, additional_user_count, inte
         subprocess.run(command, check=True)
     except subprocess.CalledProcessError as e:
         print(f"Error: {e}")
-#--------------------------------------------------------------------------------------------------------------------------------------
-# 추가한 내용 ### 차트를 그리기 위해 필요한 값을 들고오기 위함
-@app.get("/rps_data")
-async def get_rps_data():
-    try:
-        cursor.execute("SELECT recorded_time, RPS, avg_response_time, number_of_users FROM incremental ORDER BY recorded_time ASC")
-        result = cursor.fetchall()
-        data = {"recorded_times": [row[0] for row in result], "rps_values": [row[1] for row in result], 
-                "response_time": [row[2] for row in result], "number_of_users": [row[3] for row in result]}
-        return data
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
-#--------------------------------------------------------------------------------------------------------------------------------------
-#--------------------------------------------------------------------------------------------------------------------------------------
-# 프론트 할 때 필요 ### 아래3개: 페이지 관련 ### 페이지 이름 경로 등 필요한 부분 수정하세요
-# '/' 접속 시 test.html 화면 나오게끔
-@app.get("/")
-async def get_test_html():
-    return FileResponse("test.html")
 
-# incremental 실행 시 차트 페이지로 이동
-@app.get("/chart")
-async def get_chart_html():
-    return FileResponse("chart.html")
-
-# spike실행 시 spike 결과 페이지로 이동
-@app.get("/spike")
-async def get_spike_html():
-    return FileResponse("spike.html")
-#--------------------------------------------------------------------------------------------------------------------------------------
-#--------------------------------------------------------------------------------------------------------------------------------------
-# 수정한 내용 ### 가져오는 값 변경 (기존 id, name -> 3개 값 추가)
 # 테스트 목록 불러오기
 @app.get('/testcase')
 async def read_list():
-    try:
-        cursor.execute("SELECT test_id, test_name, user_plus_num, interval_time, plus_count FROM test")
+    try:    
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM test")
         result = cursor.fetchall()
-        test_data = [{"test_id": row[0], "test_name": row[1], "user_plus_num": row[2], "interval_time": row[3], "plus_count": row[4]} for row in result]
-        
-        return {"testData": test_data}
+        return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
-#--------------------------------------------------------------------------------------------------------------------------------------
-# 테스트 생성 
+
+# 테스트 생성
 @app.post('/testcase')
 async def create_test(data: TestData):
-    try: 
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor()
         cursor.execute(
             """
             INSERT INTO test (target_url, test_name, user_num, user_plus_num, interval_time, plus_count)
             VALUES (%s, %s, %s, %s, %s, %s)
-            """, 
+            """,
             (data.target_url, data.test_name, data.user_num, data.user_plus_num, data.interval_time, data.plus_count)
         )
         conn.commit()
@@ -110,17 +97,23 @@ async def create_test(data: TestData):
 @app.delete("/testcase/{test_id}")
 async def delete_test(test_id: int):
     try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor()
         cursor.execute("DELETE FROM test WHERE test_id = %s", (test_id,))
         conn.commit()
         return {"message": "Test deleted successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
-    
+
+# 테스트 실행
 @app.get("/testcase/{test_id}/execute/")
 async def execute_test(test_id: int):
     try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor()
         cursor.execute("SELECT * FROM test WHERE test_id = %s", (test_id,))
         test_data = cursor.fetchone()
+        cursor.execute("SELECT test_id FROM incremental WHERE test_id=%s", (test_id,))
         if test_data:
             test_id, target_url, test_name, user_num, user_plus_num, interval_time, plus_count = test_data
             run_load_testing_script(target_url, user_num, user_plus_num, interval_time, plus_count, test_id)
@@ -138,21 +131,33 @@ async def execute_test(test_id: int):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
     
-#--------------------------------------------------------------------------------------------------------------------------------------
-# 추가한 내용 ### spike에서 화면 출력을 위해 db에서 값을 가져오기 위함 ##### 이 내용 수정중에 있음 (이상하게 작동중)
-@app.get("/{test_id}/get_data_from_db")
-async def get_spike_data(test_id: int):
+# 테스트 결과값 반환
+@app.get("/testcase/{test_id}/stats/")
+async def stats(test_id: int):
     try:
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor()
-        cursor.execute("SELECT avg_response_time, Failures FROM spike WHERE test_id = %s", (test_id,))
-        result = cursor.fetchall()
-        print(result)
-        data = {
-            "averageResponseTime": [row[0] for row in result], 
-            "failureRateValue": [row[1] for row in result]
-        }
-        print(data)
-        return data
+        cursor.execute("SELECT * FROM incremental WHERE test_id = %s", (test_id,))
+        test_cases = cursor.fetchall()
+        if test_cases:
+            return test_cases
+        else:
+            raise HTTPException(status_code=404, detail="No stats found for this test_id")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
+    
+# 테스트 결과값 반환
+@app.get("/testcase/{test_id}/pre-stats/")
+async def stats(test_id: int):
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM example WHERE test_id = %s", (test_id,))
+        test_cases = cursor.fetchall()
+        if test_cases:
+            return test_cases
+        else:
+            raise HTTPException(status_code=404, detail="No stats found for this test_id")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
+    
