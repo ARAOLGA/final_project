@@ -1,3 +1,4 @@
+import traceback
 from fastapi import FastAPI, HTTPException
 import mysql.connector
 from fastapi.responses import FileResponse
@@ -137,7 +138,9 @@ async def stats(test_id: int):
     try:
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM incremental WHERE test_id = %s", (test_id,))
+        cursor.execute("SELECT MAX(count) FROM incremental WHERE test_id = %s", (test_id,))
+        count = cursor.fetchone()[0]
+        cursor.execute("SELECT * FROM incremental WHERE test_id = %s and count = %s", (test_id, count))
         test_cases = cursor.fetchall()
         if test_cases:
             return test_cases
@@ -147,17 +150,18 @@ async def stats(test_id: int):
         raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
     
 # 테스트 결과값 반환
-@app.get("/testcase/{test_id}/pre-stats/")
+@app.get("/testcase/{test_id}/pre_stats/")
 async def stats(test_id: int):
     try:
-        conn = mysql.connector.connect(**db_config)
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM example WHERE test_id = %s", (test_id,))
-        test_cases = cursor.fetchall()
-        if test_cases:
-            return test_cases
-        else:
+        cursor.execute("SELECT MAX(count) FROM incremental WHERE test_id = %s", (test_id,))
+        count = cursor.fetchone()[0]
+        count -= 1
+        if count == 0:
             raise HTTPException(status_code=404, detail="No stats found for this test_id")
+        else:
+            cursor.execute("SELECT * FROM incremental WHERE test_id = %s and count = %s", (test_id, count))
+            test_cases = cursor.fetchall()
+            return test_cases
     except Exception as e:
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
-    
