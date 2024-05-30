@@ -1,5 +1,3 @@
-// 차트 수정 예정 (지금은 같은 차트만 2개 나옴)
-
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import axios from 'axios';
@@ -8,18 +6,24 @@ import './result.css';
 
 const Result = () => {
   const { id } = useParams();
+  const test_id = id;
   const [data, setData] = useState([]);
-  const rpsChartRefs = [useRef(null), useRef(null)];
-  const responseTimeChartRefs = [useRef(null), useRef(null)];
-  const numberOfUsersChartRefs = [useRef(null), useRef(null)];
+  const preRpsChartRef = useRef(null);
+  const currentRpsChartRef = useRef(null);
+  const preResponseTimeChartRef = useRef(null);
+  const currentResponseTimeChartRef = useRef(null);
+  const preNumberOfUsersChartRef = useRef(null);
+  const currentNumberOfUsersChartRef = useRef(null);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const response = await axios.get(`http://localhost:8000/testcase/${id}/stats/`);
+        const pre_response = await axios.get(`http://localhost:8000/testcase/${test_id}/pre_stats/`);
+        const current_response = await axios.get(`http://localhost:8000/testcase/${test_id}/stats/`);
         
-        setData(response.data);
-        drawCharts(response.data);
+        const mergedData = [pre_response.data, current_response.data];
+        setData(mergedData);
+        drawCharts(mergedData);
       } catch (error) {
         console.error('데이터를 불러오는 중 오류가 발생했습니다:', error);
       }
@@ -28,30 +32,34 @@ const Result = () => {
     fetchData();
 
     return () => {
-      // 컴포넌트가 언마운트될 때 차트를 제거합니다.
-      rpsChartRefs.forEach(ref => ref.current && ref.current.destroy());
-      responseTimeChartRefs.forEach(ref => ref.current && ref.current.destroy());
-      numberOfUsersChartRefs.forEach(ref => ref.current && ref.current.destroy());
+      // Clean up charts on unmount
+      if (preRpsChartRef.current) preRpsChartRef.current.destroy();
+      if (currentRpsChartRef.current) currentRpsChartRef.current.destroy();
+      if (preResponseTimeChartRef.current) preResponseTimeChartRef.current.destroy();
+      if (currentResponseTimeChartRef.current) currentResponseTimeChartRef.current.destroy();
+      if (preNumberOfUsersChartRef.current) preNumberOfUsersChartRef.current.destroy();
+      if (currentNumberOfUsersChartRef.current) currentNumberOfUsersChartRef.current.destroy();
     };
-  }, [id]);
+  }, [test_id]);
 
-  // 차트 그리는 함수
-  const drawCharts = (data) => {
-    const recordedTimes = data.map(row => new Date(row[6] * 1000).toISOString().substr(11, 8));
-    const rpsValues = data.map(row => row[2]);
-    const responseTimes = data.map(row => row[4]);
-    const numberOfUsers = data.map(row => row[6]);
+  const drawCharts = (mergedData) => {
+    const preData = mergedData[0];
+    const currentData = mergedData[1];
 
-    // 기존 차트가 있으면 제거
-    rpsChartRefs.forEach(ref => ref.current && ref.current.destroy());
-    responseTimeChartRefs.forEach(ref => ref.current && ref.current.destroy());
-    numberOfUsersChartRefs.forEach(ref => ref.current && ref.current.destroy());
+    const recordedTimes1 = preData.map(row => new Date(row[7] * 1000).toISOString().substr(11, 8));
+    const recordedTimes2 = currentData.map(row => new Date(row[7] * 1000).toISOString().substr(11, 8));
+    const rpsValues1 = preData.map(row => row[3]);
+    const rpsValues2 = currentData.map(row => row[3]);
+    const responseTimes1 = preData.map(row => row[5]);
+    const responseTimes2 = currentData.map(row => row[5]);
+    const numberOfUsers1 = preData.map(row => row[6]);
+    const numberOfUsers2 = currentData.map(row => row[6]);
 
-    const createChart = (ctx, label, data, backgroundColor, borderColor) => {
+    const createChart = (ctx, labels, label, data, backgroundColor, borderColor) => {
       return new Chart(ctx, {
         type: 'line',
         data: {
-          labels: recordedTimes,
+          labels: labels,
           datasets: [{
             label: label,
             data: data,
@@ -77,47 +85,62 @@ const Result = () => {
         }
       });
     };
-
-    rpsChartRefs.forEach((ref, idx) => {
-      const ctx = document.getElementById(`rpsChart${idx + 1}`).getContext('2d');
-      ref.current = createChart(ctx, 'RPS', rpsValues, 'rgba(255, 99, 132, 0.2)', 'rgba(255, 99, 132, 1)');
-    });
-
-    responseTimeChartRefs.forEach((ref, idx) => {
-      const ctx = document.getElementById(`responseTimeChart${idx + 1}`).getContext('2d');
-      ref.current = createChart(ctx, 'Response Time', responseTimes, 'rgba(54, 162, 235, 0.2)', 'rgba(54, 162, 235, 1)');
-    });
-
-    numberOfUsersChartRefs.forEach((ref, idx) => {
-      const ctx = document.getElementById(`numberOfUsersChart${idx + 1}`).getContext('2d');
-      ref.current = createChart(ctx, 'Number of Users', numberOfUsers, 'rgba(75, 192, 192, 0.2)', 'rgba(75, 192, 192, 1)');
-    });
+    // 과거 RPS
+    if (preRpsChartRef.current) preRpsChartRef.current.destroy();
+    preRpsChartRef.current = createChart(
+      document.getElementById('preRpsChart').getContext('2d'), 
+      recordedTimes1, 'Pre Test RPS', rpsValues1, 'rgba(255, 99, 132, 0.2)', 'rgba(255, 99, 132, 1)'
+    );
+    // 현재 RPS
+    if (currentRpsChartRef.current) currentRpsChartRef.current.destroy();
+    currentRpsChartRef.current = createChart(
+      document.getElementById('currentRpsChart').getContext('2d'), 
+      recordedTimes2, 'Current Test RPS', rpsValues2, 'rgba(255, 99, 132, 0.2)', 'rgba(255, 99, 132, 1)'
+    );
+    // 과거 평균 응답 시간
+    if (preResponseTimeChartRef.current) preResponseTimeChartRef.current.destroy();
+    preResponseTimeChartRef.current = createChart(
+      document.getElementById('preResponseTimeChart').getContext('2d'), 
+      recordedTimes1, 'Pre Test Response Time', responseTimes1, 'rgba(54, 162, 235, 0.2)', 'rgba(54, 162, 235, 1)'
+    );
+    // 현재 평균 응답 시간
+    if (currentResponseTimeChartRef.current) currentResponseTimeChartRef.current.destroy();
+    currentResponseTimeChartRef.current = createChart(
+      document.getElementById('currentResponseTimeChart').getContext('2d'), 
+      recordedTimes2, 'Current Test Response Time', responseTimes2, 'rgba(54, 162, 235, 0.2)', 'rgba(54, 162, 235, 1)'
+    );
+    // 과거 유저 수
+    if (preNumberOfUsersChartRef.current) preNumberOfUsersChartRef.current.destroy();
+    preNumberOfUsersChartRef.current = createChart(
+      document.getElementById('preNumberOfUsersChart').getContext('2d'), 
+      recordedTimes1, 'Pre Test Number of Users', numberOfUsers1, 'rgba(75, 192, 192, 0.2)', 'rgba(75, 192, 192, 1)'
+    );
+    // 현재 유저 수
+    if (currentNumberOfUsersChartRef.current) currentNumberOfUsersChartRef.current.destroy();
+    currentNumberOfUsersChartRef.current = createChart(
+      document.getElementById('currentNumberOfUsersChart').getContext('2d'), 
+      recordedTimes2, 'Current Test Number of Users', numberOfUsers2, 'rgba(75, 192, 192, 0.2)', 'rgba(75, 192, 192, 1)'
+    );
   };
 
-
   return (
-
-
     <div className="result">
       <h2>Incremental Data</h2>
 
       {/* 차트 컨테이너 */}
-      <div className="charts-container" style={{width:'50vw', height:'50vh'}}>
+      <div className="charts-container" style={{width:'50vw', height:'25vh'}}>
         {/* RPS 차트 */}
-        <canvas id="rpsChart1"></canvas>
-        <canvas id="rpsChart2"></canvas>
+        <canvas id="preRpsChart"></canvas>
+        <canvas id="currentRpsChart"></canvas>
         {/* Response Time 차트 */}
-        <canvas id="responseTimeChart1"></canvas>
-        <canvas id="responseTimeChart2"></canvas>
+        <canvas id="preResponseTimeChart"></canvas>
+        <canvas id="currentResponseTimeChart"></canvas>
         {/* Number of Users 차트 */}
-        <canvas id="numberOfUsersChart1"></canvas>
-        <canvas id="numberOfUsersChart2"></canvas>
-
-
-
+        <canvas id="preNumberOfUsersChart"></canvas>
+        <canvas id="currentNumberOfUsersChart"></canvas>
       </div>
     </div>
   );
-}
+};
 
 export default Result;
