@@ -15,7 +15,7 @@ const BeforeResult = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const response = await axios.get(`http://www.cloudeof.com:8000/testcase/${id}/pre-stats/`);
+        const response = await axios.get(`http://www.cloudeof.com:8080/testcase/${id}/pre-stats/`);
         
         setData(response.data);
         drawCharts(response.data);
