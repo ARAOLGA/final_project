@@ -6,6 +6,8 @@ import './testList.css';
 const List = () => {
   const [tests, setTests] = useState([]);
   const [expandedIndex, setExpandedIndex] = useState(null);
+  const [resultData, setResultData] = useState({});
+  const [selectedResult, setSelectedResult] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -32,11 +34,13 @@ const List = () => {
 
   const handleToggleDetail = (index) => {
     setExpandedIndex(prevIndex => (prevIndex === index ? null : index));
+    setResultData({});
+    setSelectedResult(null);
   };
 
   const handleDelete = async (index) => {
     const testToDelete = tests[index];
-    const confirmed = window.confirm(`${testToDelete.test_name}을(를) 정말 삭제하시겠습니까?`); // 확인 메시지 창
+    const confirmed = window.confirm(`${testToDelete.test_name}을(를) 정말 삭제하시겠습니까?`);
 
     if (confirmed) {
       try {
@@ -55,9 +59,27 @@ const List = () => {
     navigate(`/execute/${id}`);
   };
 
-  const handleResult = (id, event) => {
+  const handleResult = async (id, event) => {
     event.stopPropagation();
-    navigate(`/result/${id}`);
+    try {
+      const response = await axios.get(`http://localhost:8000/testcase/${id}/results`);
+
+      setResultData(prevData => ({ ...prevData, [id]: response.data }));
+      setExpandedIndex(tests.findIndex(test => test.id === id));
+    } catch (error) {
+      console.error('Error fetching results:', error);
+    }
+  };
+
+  const handleSelectResult = (event) => {
+    event.stopPropagation(); // Add this line to prevent the event from closing the details
+    setSelectedResult(event.target.value);
+  };
+
+  const handleExecuteResult = (id) => {
+    if (selectedResult) {
+      navigate(`/result/${id}?selectedResult=${selectedResult}`);
+    }
   };
 
   return (
@@ -71,15 +93,36 @@ const List = () => {
             <div className="test-actions">
               <button onClick={(e) => { e.stopPropagation(); handleDelete(index); }}>삭제</button>
               <button onClick={(e) => { e.stopPropagation(); handleRun(test.id, e); }}>실행</button>
-              <button onClick={(e) => handleResult(test.id, e)}>결과</button>
+              <button onClick={(e) => { e.stopPropagation(); handleResult(test.id, e); }}>결과</button>
             </div>
           </div>
           {expandedIndex === index && (
-            <div className="test-details">
+            <div className="test-details" onClick={(e) => e.stopPropagation()}>
               <p>초기 유저 수 : {test.user_num}</p>
               <p>증가 유저 수 : {test.user_plus_num}</p>
               <p>증가 간격 : {test.interval_time}</p>
               <p>증가 횟수 : {test.plus_count}</p>
+              {resultData[test.id] && (
+                <div className="result-list">
+                  <h3>결과 비교:</h3>
+                  {resultData[test.id].map((result, index) => (
+                    <React.Fragment key={result}>
+                      <label>
+                        <input
+                          type="radio"
+                          name={`result-${test.id}`}
+                          value={result}
+                          onChange={handleSelectResult}
+                        />
+                        {`test${index + 1}`}
+                      </label>
+                      {(index + 1) % 3 === 0 && <br />} {/* 한 줄당 3개의 요소가 출력되면 줄바꿈 */}
+                    </React.Fragment>
+                  ))}
+                  <br></br>
+                  <button onClick={() => handleExecuteResult(test.id)}>실행</button>
+                </div>
+              )}
             </div>
           )}
         </div>
