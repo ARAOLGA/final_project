@@ -8,9 +8,9 @@ metadata:
     alb.ingress.kubernetes.io/target-type: ip  # 대상 유형을 IP로 설정 (IP 주소를 사용하여 트래픽을 분배
     alb.ingress.kubernetes.io/load-balancer-name: app-loadbalancer  # 로드 밸런서 이름 설정
     alb.ingress.kubernetes.io/subnets: subnet-0cea2476111e7a490, subnet-098e3ae4b33cce460  # 서브넷 설정
-    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'  # ALB가 수신할 포트 설정
-    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:ap-northeast-1:058264352854:certificate/beb8d205-f19f-40e8-b424-c672c 인증서 ARN
-    # alb.ingress.kubernetes.io/healthcheck-path: /health  # 헬스 체크 경로 설정
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}, {"HTTP": 8080}]'  # ALB가 수신할 포트 설정
+    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:ap-northeast-1:058264352854:certificate/beb8d205-f19f-40e8-b424-c672c951e940  # SSL 인증서 ARN
+    alb.ingress.kubernetes.io/healthcheck-path: /health  # 헬스 체크 경로 설정
 spec:
   ingressClassName: alb  # 사용할 Ingress 클래스 이름 (ALB 사용)
   rules:
