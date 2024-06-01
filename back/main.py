@@ -149,19 +149,29 @@ async def stats(test_id: int):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
     
-# 테스트 결과값 반환
-@app.get("/testcase/{test_id}/pre_stats/")
-async def stats(test_id: int):
+# 이전 테스트 결과값 반환
+@app.get("/testcase/{test_id}/stats/{selectedResult}")
+async def stats(test_id: int, selectedResult: int):
     try:
-        cursor.execute("SELECT MAX(count) FROM incremental WHERE test_id = %s", (test_id,))
-        count = cursor.fetchone()[0]
-        count -= 1
-        if count == 0:
-            raise HTTPException(status_code=404, detail="No stats found for this test_id")
-        else:
-            cursor.execute("SELECT * FROM incremental WHERE test_id = %s and count = %s", (test_id, count))
-            test_cases = cursor.fetchall()
-            return test_cases
+        cursor.execute("SELECT * FROM incremental WHERE test_id = %s AND count = %s", (test_id, selectedResult,))
+        test_cases = cursor.fetchall()
+        print(test_cases)
+        return test_cases
     except Exception as e:
-        traceback.print_exc()
+        # traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
+    
+@app.get("/testcase/{id}/results")
+async def get_id_list(id: int):
+    try:
+        cursor.execute("SELECT count FROM incremental WHERE test_id = %s", (id,))
+        idList = cursor.fetchall()
+        print(idList)
+        idList = set(idList)
+        idList = [t[0] for t in idList]
+        print(idList)
+        if idList:
+            return idList
+    except Exception as e:
+            traceback.print_exc()
+            raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
