@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spike Test</title>
+</head>
+<body>
+    <h1>Spike Test</h1>
+    <p id="loadDuration">Load Duration: <span id="loadDurationValue">0:00:00</span></p>
+    <p id="result" style="display: none;">Average Response Time: <span id="averageResponseTime"></span> ms<br>Failure Rate: <span id="failureRateValue"></span>%</p>
+
+    <script>
+        var test_id = sessionStorage.getItem('test_id');
+        var startTime = new Date().getTime();  // 테스트 시작 시간 기록
+
+        // 시간을 계산하고 표시하는 함수
+        function updateTime() {
+            var currentTime = new Date().getTime();  // 현재 시간 가져오기
+            var elapsedTime = currentTime - startTime;  // 경과 시간 계산
+
+            // 시간 형식으로 변환하여 표시
+            var hours = Math.floor(elapsedTime / 3600000);
+            var minutes = Math.floor((elapsedTime % 3600000) / 60000);
+            var seconds = Math.floor((elapsedTime % 60000) / 1000);
+            document.getElementById("loadDurationValue").innerText = hours + ":" + minutes + ":" + seconds;
+        }
+
+        // 매 초마다 시간을 업데이트
+        var intervalId = setInterval(updateTime, 1000);
+
+        var getDataTimeoutId = setTimeout(function() {
+            fetch(`/${test_id}/get_data_from_db`)
+                .then(response => response.json())
+                .then(data => {
+                    clearInterval(intervalId);
+                    alert("테스트가 종료되었습니다");
+                    document.getElementById("averageResponseTime").innerText = data["averageResponseTime"];
+                    document.getElementById("failureRateValue").innerText = data["failureRateValue"];
+                    document.getElementById("result").style.display = "block";
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                });
+        }, 1000); // 1초 후에 실행
+        
+
+
+    </script>
+</body>
+</html>
