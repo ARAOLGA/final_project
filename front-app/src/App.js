@@ -7,7 +7,7 @@ import List from './testList/testList.js'
 import Result from './result/result.js';
 import Execute from './execute/execute.js';
 import Logmsg from './logmsg/logmsg.js';
-import Health from './health/health.js';
+// import Health from './health/health.js';
 import './App.css';
 
 
