@@ -1,78 +1,60 @@
 pipeline {
-    agent any // Jenkins 파이프라인을 어느 에이전트에서나 실행할 수 있도록 설정
+    agent any
     environment {
-        SERVER_IP = '43.206.109.37' // Jenkins 서버의 IP 주소
-        SONAR_URL = 'http://43.206.109.37:9000' // SonarQube 서버의 URL
-        DOCKER_IMAGE = 'oncliff/eof-final' // Docker 이미지 이름
-        DOCKER_TAG = '1.0' // Docker 이미지 태그
-        DOCKER_CREDENTIALS_ID = 'docker-hub-credentials' // Docker Hub 인증 정보 ID
+        SERVER_IP = '43.206.109.37'
+        SONAR_URL = 'http://43.206.109.37:9000'
+        DOCKER_IMAGE = 'oncliff/eof-final'
+        DOCKER_TAG = '1.0'
+        DOCKER_CREDENTIALS_ID = 'docker-hub-credentials'
+        KUBERNETES_CREDENTIALS_ID = 'kube-config'
+        KUBERNETES_NAMESPACE = 'eof'
+        K8S_DEPLOYMENT_FRONT = 'front-app'
+        K8S_DEPLOYMENT_BACK = 'back-app'
+        K8S_SERVERURL = 'https://420CB5DD46DDEE6DC09968E38A979B1A.gr7.ap-northeast-1.eks.amazonaws.com'
+        K8S_YAML = 'app-deploy.yaml'
+        AWS_CREDENTIALS_ID = 'AWS_IAM'
+        AWS_REGION = 'ap-northeast-1'
+        EKS_CLUSTER_NAME = 'EOF-cluster'
+        NEW_TAG = "${DOCKER_TAG}.${env.BUILD_NUMBER}" // 글로벌 환경 변수로 NEW_TAG 초기화
     }
     triggers {
-        pollSCM('* * * * *') // 매 분마다 Git 변경 사항 확인
+        pollSCM('* * * * *')
     }
     stages {
-        stage('Checkout') { // 첫 번째 단계: Git 저장소에서 코드 체크아웃
+        stage('Checkout') {
             steps {
                 checkout([
                     $class: 'GitSCM',
-                    branches: [[name: '*/main']], // 'main' 브랜치에서 코드 가져옴
+                    branches: [[name: '*/main']],
                     userRemoteConfigs: [[
-                        url: 'https://github.com/oncliff-climbing/final.git', // Git 저장소 URL
-                        credentialsId: 'github' // Jenkins에 저장된 Git 인증 정보 사용
+                        url: 'https://github.com/oncliff-climbing/final.git',
+                        credentialsId: 'github'
                     ]]
                 ])
             }
         }
-        stage('SonarQube analysis') { // 두 번째 단계: SonarQube 분석 수행
+        stage('Set Environment Variables') { // 새로운 단계: 환경 변수 설정
             steps {
-                withSonarQubeEnv('SonarQube_Server') { // SonarQube 환경 설정 사용
-                    sh """
-                        sonar-scanner \
-                        -Dsonar.projectKey=eof  \
-                        -Dsonar.sources=. \
-                        -Dsonar.host.url=${SONAR_URL} \
-                        -Dsonar.login=sqa_539e91bc482d78b282d1e85523dd2865959accbc
-                    """
+                script {
+                    env.NEW_TAG = "${DOCKER_TAG}.${currentBuild.number}"
+                    echo "NEW_TAG set to: ${env.NEW_TAG}" // NEW_TAG 값 확인
                 }
             }
         }
-        stage("Slack Notification") { // 세 번째 단계: SonarQube 분석 결과에 대한 Slack 알림 전송
-            steps {
-                echo 'Sending Slack Notification...' // Slack 알림 테스트 메시지 출력
-            }
-            post {
-                success { // SonarQube 분석 성공 시
-                    slackSend(channel: '#cicd', color: 'good', 
-                    message: """*SonarQube analysis success!* \n *Jenkins:* ${env.SERVER_IP}:8080 \n *SonarQube:* ${env.SONAR_URL}""")
-                    script {
-                        currentBuild.result = 'SUCCESS' // 빌드 결과를 SUCCESS로 설정
-                    }
-                }
-                failure { // SonarQube 분석 실패 시
-                    slackSend(channel: '#cicd', color: 'danger', 
-                    message: """*SonarQube analysis failure!* \n *Jenkins:* ${env.SERVER_IP}:8080 \n *SonarQube:* ${env.SONAR_URL}""")
-                    script {
-                        currentBuild.result = 'FAILURE' // 빌드 결과를 FAILURE로 설정
-                    }
-                }
-            }
-        }
-        stage('Docker Image Build and Push') { // 네 번째 단계: Docker 이미지 빌드 및 푸시
+        stage('Docker Image Build and Push') {
             when {
-                expression { return currentBuild.resultIsBetterOrEqualTo('SUCCESS') } // 빌드 성공 시에만 실행
-            }
-            environment {
-                NEW_TAG = "${DOCKER_TAG}.${env.BUILD_NUMBER}"
+                expression { return currentBuild.resultIsBetterOrEqualTo('SUCCESS') }
             }
             steps {
                 script {
-                    def images = ["front-app", "back-app"] // 빌드할 이미지 목록
+                    def images = ["front-app", "back-app"]
                     images.each { img ->
-                        dir("${env.WORKSPACE}/${img}") { // 각 이미지 디렉토리로 이동
-                            sh "docker build -t ${DOCKER_IMAGE}:${img}_${env.NEW_TAG} ." // Docker 이미지 빌드
+                        dir("${env.WORKSPACE}/${img}") {
+                            sh "docker build -t ${DOCKER_IMAGE}:${img}_${env.NEW_TAG} ."
                             withCredentials([usernamePassword(credentialsId: DOCKER_CREDENTIALS_ID, passwordVariable: 'DOCKER_PASSWORD', usernameVariable: 'DOCKER_USERNAME')]) {
-                                sh "echo ${DOCKER_PASSWORD} | docker login -u ${DOCKER_USERNAME} --password-stdin" // Docker Hub 로그인
-                                sh "docker push ${DOCKER_IMAGE}:${img}_${env.NEW_TAG}" // Docker 이미지 푸시
+                                sh "echo ${DOCKER_PASSWORD} | docker login -u ${DOCKER_USERNAME} --password-stdin"
+                                sh "docker push ${DOCKER_IMAGE}:${img}_${env.NEW_TAG}"
+                                sh "docker logout"
                             }
                         }
                     }
@@ -80,17 +62,51 @@ pipeline {
             }
             post {
                 success {
+                    echo "Docker images successfully built and pushed with tag ${env.NEW_TAG}" // 성공 시 NEW_TAG 확인
                     slackSend(channel: '#cicd', color: 'good', message: """*Docker Build and Push Success!* \n *Docker Image:* ${DOCKER_IMAGE}:${env.NEW_TAG}""")
                 }
                 failure {
+                    echo "Docker build and push failed with tag ${env.NEW_TAG}" // 실패 시 NEW_TAG 확인
                     slackSend(channel: '#cicd', color: 'danger', message: """*Docker Build and Push Failure!* \n *Docker Image:* ${DOCKER_IMAGE}:${env.NEW_TAG}""")
+                }
+            }
+        }
+        stage('Deploy to Kubernetes') {
+            when {
+                expression { return currentBuild.resultIsBetterOrEqualTo('SUCCESS') }
+            }
+            steps {
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: "${env.AWS_CREDENTIALS_ID}"], 
+                                 file(credentialsId: "${env.KUBERNETES_CREDENTIALS_ID}", variable: 'KUBECONFIG')]) {
+                    script {
+                        def kubeconfigPath = "${env.WORKSPACE}/.kube/config"
+                        sh """
+                            mkdir -p ${env.WORKSPACE}/.kube
+                            export KUBECONFIG=${kubeconfigPath}
+                            aws eks update-kubeconfig --region ${env.AWS_REGION} --name ${env.EKS_CLUSTER_NAME}
+                            sleep 15
+                            kubectl set image deployment/${env.K8S_DEPLOYMENT_FRONT} front=${env.DOCKER_IMAGE}:front-app_${env.NEW_TAG} -n ${env.KUBERNETES_NAMESPACE}
+                            kubectl set image deployment/${env.K8S_DEPLOYMENT_BACK} back=${env.DOCKER_IMAGE}:back-app_${env.NEW_TAG} -n ${env.KUBERNETES_NAMESPACE}
+                            kubectl get all -n ${env.KUBERNETES_NAMESPACE} -o wide
+                        """
+                    }
+                }
+            }
+            post {
+                success {
+                    echo "Kubernetes deployment updated with images tagged ${env.NEW_TAG}" // 성공 시 NEW_TAG 확인
+                    slackSend(channel: '#cicd', color: 'good', message: """*Kubernetes Deployment Update Success!* \n *Images:* ${DOCKER_IMAGE}:${env.NEW_TAG}""")
+                }
+                failure {
+                    echo "Kubernetes deployment update failed with images tagged ${env.NEW_TAG}" // 실패 시 NEW_TAG 확인
+                    slackSend(channel: '#cicd', color: 'danger', message: """*Kubernetes Deployment Update Failure!* \n *Images:* ${DOCKER_IMAGE}:${env.NEW_TAG}""")
                 }
             }
         }
     }
     post {
         always {
-            cleanWs() // 작업이 끝난 후 워크스페이스 정리
+            cleanWs()
         }
     }
 }
