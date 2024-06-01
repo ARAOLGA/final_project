@@ -15,9 +15,17 @@ spec:
     spec:
       containers:
         - name: front  # 컨테이너 이름 지정
-          image: oncliff/eof-final:front-app_1.0.29  # 사용할 컨테이너 이미지 지정  # shvic/projectf:dockerfile
+          image: oncliff/eof-final:front-app_1.0.10  # 사용할 컨테이너 이미지 지정  # shvic/projectf:dockerfile
           ports:
             - containerPort: 3000  # 프론트엔드 컨테이너에서 수신할 포트 번호
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+
           # livenessProbe:
           #   httpGet:
           #     path: /health
@@ -54,9 +62,16 @@ spec:
     spec:
       containers:
         - name: back  # 컨테이너 이름 지정
-          image: oncliff/eof-final:back-app_1.0.29 # 사용할 컨테이너 이미지 지정
+          image: oncliff/eof-final:back-app_1.0.10 # 사용할 컨테이너 이미지 지정
           ports:
             - containerPort: 8000  # 백엔드 컨테이너에서 수신할 포트 번호
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
           # livenessProbe:
           #   httpGet:
           #     path: /health
@@ -95,5 +110,5 @@ spec:
     app: back  # 이 라벨을 가진 파드를 선택
   ports:
     - protocol: TCP  # 사용할 프로토콜 지정 (TCP)
-      port: 8080  # 클러스터 외부에서 접근할 포트 (서비스가 노출할 포트)
+      port: 80  # 클러스터 외부에서 접근할 포트 (서비스가 노출할 포트)
       targetPort: 8000  # 백엔드 컨테이너의 포트 (타겟 포트)
