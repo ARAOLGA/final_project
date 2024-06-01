@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>RPS Charts</title>
+    <!-- Chart.js 라이브러리 -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <!-- 첫 번째 차트(rps) -->
+    <canvas id="rpsChart1" width="800" height="150"></canvas>
+
+    <!-- 두 번째 차트(avg(response_time)) -->
+    <canvas id="avgChart" width="800" height="150"></canvas>
+
+    <!-- 세 번째 그래프(user_count) -->
+    <canvas id="userChart" width="800" height="150"></canvas>
+    
+    <script>
+        // GET 요청 보내기
+        fetch(`/testcase/${test_id}/execute`, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            console.log('Success:', data);
+        })
+        .catch(error => {
+            console.error('Error:', error);
+        });
+
+        // MySQL에서 가져온 데이터를 담을 배열
+        var recorded_times = [];
+        var rps_values = [];
+
+        // 초 단위를 시:분:초 형식으로 변환하는 함수
+        function secondsToHHMMSS(seconds) {
+            const date = new Date(seconds * 1000);
+            return date.toISOString().substr(11, 8);
+        }
+
+        // MySQL에서 데이터 가져오기
+        function fetchData() {
+            fetch('/rps_data') // FastAPI 엔드포인트로 요청
+            .then(response => response.json())
+            .then(data => {
+                // 가져온 데이터를 배열에 저장
+                recorded_times = data.recorded_times.map(secondsToHHMMSS);
+                rps_values = data.rps_values;
+                response_time = data.response_time;
+                number_of_users = data.number_of_users;
+
+                console.log(recorded_times);
+                console.log(rps_values);
+                // 차트 그리기
+                drawCharts();
+            })
+            .catch(error => {
+                console.error('Error fetching data:', error);
+            });
+        }
+
+
+
+        // 세 개의 그래프 그리기
+        function drawCharts() {
+            // 첫 번째 그래프
+            var ctx1 = document.getElementById('rpsChart1').getContext('2d');
+            var myChart1 = new Chart(ctx1, {
+                type: 'line',
+                data: {
+                    labels: recorded_times,
+                    datasets: [{
+                        label: 'RPS',
+                        data: rps_values,
+                        backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                        borderColor: 'rgba(255, 99, 132, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    scales: {
+                        xAxes: [{
+                            type: 'time',
+                            time: {
+                                unit: 'minute' // 시간 단위 설정 (분)
+                            }
+                        }],
+                        yAxes: [{
+                            ticks: {
+                                beginAtZero: true
+                            }
+                        }]
+                    }
+                }
+            });
+
+            // 두 번째 그래프
+            var ctx2 = document.getElementById('avgChart').getContext('2d');
+            var myChart2 = new Chart(ctx2, {
+                type: 'line',
+                data: {
+                    labels: recorded_times,
+                    datasets: [{
+                        label: 'response_time',
+                        data: response_time,
+                        backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                        borderColor: 'rgba(255, 99, 132, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    scales: {
+                        xAxes: [{
+                            type: 'time',
+                            time: {
+                                unit: 'minute' // 시간 단위 설정 (분)
+                            }
+                        }],
+                        yAxes: [{
+                            ticks: {
+                                beginAtZero: true
+                            }
+                        }]
+                    }
+                }
+            });
+            
+            // 세 번째 그래프
+            var ctx3 = document.getElementById('userChart').getContext('2d');
+            var myChart3 = new Chart(ctx3, {
+                type: 'line',
+                data: {
+                    labels: recorded_times,
+                    datasets: [{
+                        label: 'Users',
+                        data: number_of_users,
+                        backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                        borderColor: 'rgba(255, 99, 132, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    scales: {
+                        xAxes: [{
+                            type: 'time',
+                            time: {
+                                unit: 'minute' // 시간 단위 설정 (분)
+                            }
+                        }],
+                        yAxes: [{
+                            ticks: {
+                                beginAtZero: true
+                            }
+                        }]
+                    }
+                }
+            });
+        }
+
+        // 페이지 로드 시 데이터 가져오고 그래프 그리기
+        fetchData();
+    </script>
+</body>
+</html>
