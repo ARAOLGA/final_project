@@ -13,6 +13,9 @@ RUN npm install
 # 소스코드 복사
 COPY . .
 
+# 필요한 모듈 설치
+RUN npm install stream-http https-browserify url stream-browserify assert
+
 # React 애플리케이션 빌드
 RUN npm run build
 

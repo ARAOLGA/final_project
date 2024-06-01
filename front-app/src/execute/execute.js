@@ -15,7 +15,7 @@ const Execute = () => {
     if (!isExecuted.current) { // isExecuted가 false일 때만 실행
       isExecuted.current = true; // 실행 후 true로 변경
       try {
-        const response = await axios.get(`http://www.cloudeof.com:8000/testcase/${id}/execute/`);
+        const response = await axios.get(`http://www.cloudeof.com:8080/testcase/${id}/execute/`);
         setTestData(response.data);
       } catch (error) {
         console.error('Error executing test:', error);
@@ -25,7 +25,7 @@ const Execute = () => {
 
   const deleteTest = async () => {
     try {
-      await axios.delete(`http://www.cloudeof.com:8000/testcase/${id}/stats/`);
+      await axios.delete(`http://www.cloudeof.com:8080/testcase/${id}/stats/`);
       console.log('Test deleted successfully');
     } catch (error) {
       console.error('Error deleting test:', error);

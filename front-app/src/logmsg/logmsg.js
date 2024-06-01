@@ -6,7 +6,7 @@ function Logmsg() {
   const [receivedMessage, setReceivedMessage] = useState('');
 
   useEffect(() => {
-    const ws = new WebSocket('ws://localhost:8000/ws'); // 해당 URL은 FastAPI 서버의 웹 소켓 엔드포인트로 변경해야 합니다.
+    const ws = new WebSocket('http://www.cloudeof.com:8080/ws'); // 해당 URL은 FastAPI 서버의 웹 소켓 엔드포인트로 변경해야 합니다.
     
     ws.onopen = () => {
       console.log('Connected to server');

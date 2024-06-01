@@ -11,7 +11,7 @@ const List = () => {
   useEffect(() => {
     const fetchTests = async () => {
       try {
-        const response = await axios.get('http://www.cloudeof.com:8000/testcase');
+        const response = await axios.get('http://www.cloudeof.com:8080/testcase');
         const data = response.data.map(([id, target_url, test_name, user_num, user_plus_num, interval_time, plus_count]) => ({
           id,
           target_url,
@@ -41,7 +41,7 @@ const List = () => {
     if (confirmed) {
       try {
         const idToDelete = testToDelete.id;
-        await axios.delete(`http://localhost:8000/testcase/${idToDelete}`);
+        await axios.delete(`http://www.cloudeof.com:8080/testcase/${idToDelete}`);
         const newTests = tests.filter((_, i) => i !== index);
         setTests(newTests);
       } catch (error) {
