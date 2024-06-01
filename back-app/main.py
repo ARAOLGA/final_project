@@ -8,6 +8,28 @@ import subprocess
 
 app = FastAPI()
 
+# @app.get("/health")
+# def health_check():
+#     return {"status": "OK"}
+
+# @app.get("/")
+# def read_root():
+#     return {"message": "Hello World"}
+
+# CORS 설정 추가
+origins = [
+    "http://localhost:3000",
+    "http://www.cloudeof.com",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 @app.get("/health")
 def health_check():
     return {"status": "OK"}
