@@ -5,7 +5,7 @@ const Health = () => {
   useEffect(() => {
     const fetchHealthStatus = async () => {
       try {
-        const response = await axios.get('http://www.cloudeof.com:3000');
+        const response = await axios.get('http://www.cloudeof.com:80');
         if (response.status === 100) {
           setStatus('Server is healthy');
         } else {
